@@ -8,19 +8,24 @@
     </xrefs>
     <expand macro="requirements"/>
     <command detect_errors="exit_code"><![CDATA[
-
+        #set $DATADIR = "."
         #if $model_source.source == "built-in":
             ln -s \$(dirname \$(which run_clair3.sh))/models/$model_source.select_built_in clair3_model &&
+            #set $model_name = $model_source.select_built_in
+            #set $DATADIR = "."
+            ln -s \$(dirname \$(which run_clair3.sh))/models/ datadir_clair3 &&
         #else if $model_source.source == "datatable":
             #if $model_source.model.fields.source == "rerio" and $ont_license_agree != "true"
                 echo "You must agree to the terms of the Oxford Nanopore Technologies, Ltd. Public License agreement to use Rerio models." >&2 &&
                 exit 2 ;
-            #end if          
-            ln -s $model_source.model.fields.path clair3_model &&            
+            #end if
+            ln -s $model_source.model.fields.path clair3_model &&
+            #set $DATADIR = $model_source.model.fields.path
         #else if $model_source.source == "history":
             OUTNAME=`tar -tf $model_source.model | head -1 | cut -f1 -d"/"` &&
             tar -xf $model_source.model && 
             mv \$OUTNAME clair3_model &&
+            #set $DATADIR = "."
         #end if
 
         #if str( $fetch_primer_scheme.fetch ) == "no":
@@ -52,15 +57,21 @@
             --bed primer.bed
             --ref reference.fasta
         #end if
-            --model-dir .
-            --model clair3_model
-
+            --model-dir $DATADIR
+            --model $model_name
             --min-depth $min_depth
+            --min-variant-quality $min_variant_quality
+            --min-allele-frequency $min_allele_frequency
+            --min-mask-allele-frequency $min_mask_allele_frequency
+            --min-frameshift-quality $min_frameshift_quality
+            --min-minor-allele-count $min_minor_allele_count
             --min-mapq $min_mapq
             --primer-match-threshold $primer_match_threshold
             $align_consensus
             $linearise_fasta
             $allow_mismatched_primers
+            $no_indels
+            $no_frameshifts
 
         #if $normalise > 0:
             --normalise ${normalise}
@@ -92,8 +103,28 @@
         help="Allow fuzzy primer matching within this threshold (default: 35)" />
 
         <param argument="--min-depth" type="integer" value="20"
-        label="Minimum Depth"
+        label="Minimum QUAL"
         help="Minimum depth required to call a variant (default: 20)" />
+
+        <param argument="--min-variant-quality" type="integer" value="10"
+        label="Minimum Depth"
+        help="Minimum QUAL score for a variant to pass (default: 10)" />
+
+        <param argument="--min-allele-frequency" type="float" value="0.6"
+        label="Minimum allele frequency"
+        help="Minimum allele frequency (AF FORMAT field) for a variant to be added to the final consensus sequence (default: 0.6)" />
+
+        <param argument="--min-mask-allele-frequency" type="float" value="0.1"
+        label="Minimum allele frequency mask"
+        help="Minimum allele frequency below which a variant is discarded rather than masked. (default: 0.1)" />
+
+        <param argument="--min-frameshift-quality" type="integer" value="50"
+        label="Minimum frameshift quality"
+        help="Minimum QUAL score for frameshifting indels, the default is higher than the usual minimum variant quality due to frameshift indels being extremely rare in viruses. (default: 50)" />
+
+        <param argument="--min-minor-allele-count" type="integer" value="4"
+        label="Minimum alt allele read count"
+        help="Minimum alt allele read count (AD FORMAT field) for a variant to pass; low-count variants are quietly discarded rather than masked (default: 4)" />
 
         <param argument="--align-consensus" type="boolean" truevalue="--align-consensus" falsevalue=""
         label="Align Consensus to reference"
@@ -106,6 +137,14 @@
         <param argument="--allow-mismatched-primers" type="boolean" truevalue="--allow-mismatched-primers" falsevalue=""
         label="Allow primer mismatch"
         help="Reads will not be discarded by align_trim if they appear to have primers from different amplicons." />
+
+        <param argument="--no-indels" type="boolean" truevalue="--no-indels" falsevalue=""
+        label="Do not report InDels"
+        help="Do not report InDels (uses SNP-only mode of nanopolish/medaka)" />
+
+        <param argument="--no-frameshifts" type="boolean" truevalue="--no-frameshifts" falsevalue=""
+        label="Remove variants which induce frameshifts"
+        help="Remove variants which induce frameshifts (ignored when --no-indels set)" />
 
         <!-- Primer and Reference fetching -->
         
@@ -230,7 +269,7 @@
             </conditional>
             <conditional name="model_source">
                 <param name="source" value="built-in" />
-                <param name="select_built_in" value="r941_prom_hac_g360+g422" />
+                <param name="select_built_in" value="r941_prom_sup_g5014" />
             </conditional>
             <output name="consensus_fasta">
                 <assert_contents>
@@ -264,7 +303,7 @@
             <param name="read_file" value="test.fastq.gz" />
             <conditional name="model_source">
                 <param name="source" value="built-in"/>
-                <param name="select_built_in" value="r941_prom_hac_g360+g422"/>
+                <param name="select_built_in" value="r941_prom_sup_g5014"/>
             </conditional>
             <output name="consensus_fasta">
                 <assert_contents>
@@ -301,7 +340,7 @@
             <param name="align_consensus" value="True" />
             <conditional name="model_source">
                 <param name="source" value="built-in" />
-                <param name="select_built_in" value="r941_prom_hac_g360+g422" />
+                <param name="select_built_in" value="r941_prom_sup_g5014" />
             </conditional>
             <output name="consensus_fasta">
                 <assert_contents>
